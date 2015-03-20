@@ -3,15 +3,15 @@
 # http://github.com/goldendict/goldendict
 
 NAME=${NAME:-goldendict}
-VERSION=${VERSION:-$(date +%Y%m%d)}
+#VERSION=${VERSION:-$(date +%Y%m%d)}
+VERSION=${VERSION:-1.5.git}
 
-BUILD=${BUILD:-1ttd}
+BUILD=${BUILD:-1}
 ARCH=${ARCH:-$(uname -m)}
 
 # Directories
 TMP=${TMP:-/tmp/build}
 PKG=${PKG:-$TMP/package-$NAME}
-OUT=${OUT:-$TMP}
 CWD=`pwd`
 
 SOURCE=https://github.com/goldendict/goldendict
@@ -48,9 +48,7 @@ fi
 if [ ! -d $PKG ]; then
   mkdir -p $PKG
 fi
-if [ ! -d $OUT ]; then
-  mkdir -p $OUT
-fi
+rm -rf $PKG/*
 
 # getting source codes
 if [ ! -d $TMP/$NAME ]; then
@@ -60,32 +58,29 @@ else
   git pull --ff-only || exit 1
 fi
 
-echo -e "\E[0;32m+----------------------------------+\E[0;0m"
-echo -e "\E[0;32m| Start SlackBuild $NAME-$VERSION |\E[0;0m"
-echo -e "\E[0;32m+----------------------------------+\E[0;0m"
+echo Building package
 
 cd $TMP/$NAME || exit 1
 
 chown -R root:root .
 chmod -R u+w,go+r-w,a-s .
-#find . -perm /111 -exec chmod 755 '{}' \; -o -exec chmod 644 '{}' \;
-qmake "CONFIG+=no_epwing_support" "DISABLE_INTERNAL_PLAYER=1"
-sed -i 's,/usr/local/,/usr/,' Makefile
+
+# Build package
+# If you istalled FFmpeg, you can remove 2nd line to enable internal player
+qmake \
+    "CONFIG+=no_epwing_support" \
+    "DISABLE_INTERNAL_PLAYER=1"
+sed -i 's|/usr/local|/usr|g' Makefile
 make clean || exit 1
 make || exit 1
-install -m 755 -s -D goldendict \
-    $PKG/usr/bin/goldendict
-install -m 644    -D redist/icons/goldendict.png \
-    $PKG/usr/share/pixmaps/goldendict.png
-install -m 644    -D redist/goldendict.desktop \
-    $PKG/usr/share/applications/goldendict.desktop
+make install INSTALL_ROOT=$PKG 2>&1 | tee $TMP/install-$NAME.log
 
 # Install the documentation
 mkdir -p $PKG/usr/doc/$NAME
 install -m 644 CREDITS.txt LICENSE.txt \
     $PKG/usr/doc/$NAME
-install    -m 644 $CWD/$NAME-git.SlackBuild \
-    $PKG/usr/doc/$NAME-git.SlackBuild
+install -m 644 $CWD/$NAME-git.SlackBuild \
+    $PKG/usr/doc/$NAME/$NAME-git.SlackBuild
 
 # Copy slack-desc and doinst.sh files
 install -D -m 644 $CWD/slack-desc $PKG/install/slack-desc
@@ -94,4 +89,5 @@ install    -m 755 $CWD/doinst.sh  $PKG/install/doinst.sh
 # Package the tree
 cd $PKG
 chown root:root . -R
-/sbin/makepkg -l y -c n $OUT/$NAME-$VERSION-$ARCH-$BUILD.txz
+find $PKG/usr/share -type f -exec chmod 644 {} \;
+makepkg -l y -c n $TMP/$NAME-$VERSION-$ARCH-$BUILD.txz
